@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: nginx-webapp
+  namespace: dev
+spec:
+  replicas: 3
+  serviceName: svc-nginx
+  selector:
+    matchLabel:
+      app.kubernetes.io: sts-app
+  minReadySeconds: 15
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io: sts-app
+    spec:
+      terminationGracePeriodSeconds: 10
+      containers:
+      - name: nginx
+        image: registry.k8s.io/nginx-slim:0.24
+        ports:
+          - containerPort: 80
+            name: web 
+        volumeMounts:
+        - name: nginx-path
+          mountPath: /usr/share/nginx/html
+  volumeClaimTemplate:
+  - metadata:
+      name: nginx-path 
+    spec:
+      accessMode: ["ReadWriteOnce"]
+      storageClassName: "defineyourstorageclassname" 
+      resources:
+        requests:
+          storage: 10Gi   
+---
+apiVersion: v1 
+kind: Service 
+metadata:
+  name: svc-sts-app
+  namespace: dev 
+spec:
+  selector: 
+    app.kubernetes.io: sts-app 
+  ports:
+    - port: 80
+      name: web
+  clusterIP: None
