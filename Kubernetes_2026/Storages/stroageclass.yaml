@@ -9,5 +9,7 @@ resources:
   requests:
     storage: 10GI
 parameters:
-  encrypted: true
+  type: gp3
+  fsType: ext4
+volumeBindingMode: WaitForFirstConsumer
   
