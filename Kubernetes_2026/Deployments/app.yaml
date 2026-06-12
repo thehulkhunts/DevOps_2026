@@ -24,6 +24,8 @@ spec:
                 operator: In 
                 values:
                 - linux
+                - Rhel
+                - amazonlinux
       containers:
       - name: java-app
         image: vinayjadhav/web-app:v1.0.0
