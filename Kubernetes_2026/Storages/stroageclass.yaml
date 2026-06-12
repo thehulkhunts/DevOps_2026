@@ -1,0 +1,13 @@
+apiVersion: storage.k8s.io/v1 
+kind: Storageclass
+metadata:
+  name: storageclass-01
+provisioner: ebs.csi.aws.com
+volumeAllowExpansion: true
+reclaimPolicy: Retain
+resources:
+  requests:
+    storage: 10GI
+parameters:
+  encrypted: true
+  

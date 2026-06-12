@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: java-app
+  namespace: dev
+spec:
+  selector:
+    matchLabels:
+      app: java-app 
+  template:
+    metadata:
+      labels:
+        app: java-app
+    spec:
+      serviceAccountName: dev-sa-deployment
+      imagePullSecrets:
+      - name: reg-cred
+      affinities:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDUringExecution:
+          - labelSelector:
+              matchExpression:
+              - key: kubernetes.io/arch
+                operator: In 
+                values:
+                - linux
+      containers:
+      - name: java-app
+        image: vinayjadhav/web-app:v1.0.0
+        resources:
+          limits:
+            memory: "128Mi"
+            cpu: "500m"
+          requests:
+            memory: "100Mi"
+            cpu: "256m"
+        ports:
+        - containerPort: 8080
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 50
+          periodSeconds: 10
+        seurityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFileSystem: true
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: java-app-svc
+  namespace: dev
+spec:
+  selector:
+    app: java-app
+  ports:
+  - port: 80
+    targetPort: 8080
+  type: LoadBalancer 
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: java-app-svc-ingress
+  labels:
+    app.kubernetes.io/name: java-app-svc-ingress
+  ingressClassName: "nginx"
+  rules:
+  - http:
+      paths:
+      - pathType: Prefix
+        path: /
+        backend:
+          service:
+            name: java-app-svc
+            port: 
+              number: 80
+
+
