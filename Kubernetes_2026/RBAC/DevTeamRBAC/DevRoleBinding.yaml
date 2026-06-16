@@ -3,7 +3,7 @@ kind: RoleBinding
 metadata:
   name: Dev-paymentsapi-rolebinding
   namespace: dev 
-subject:
+subjects:
 - kind: Group 
   name: dev-payments 
   namespace: dev 
