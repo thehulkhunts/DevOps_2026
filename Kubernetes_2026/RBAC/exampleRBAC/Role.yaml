@@ -7,7 +7,7 @@ rules:
 - apiGroups: [""]
   resources:
   - pods
-  - pods/logs
+  - pods/log
   - configmaps
   - secrets
   - services
