@@ -1,0 +1,36 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: role-for-deployment
+  namespace: dev
+rules:
+- apiGroups: [""]
+  resources:
+  - pods
+  - pods/log
+  - configmaps
+  - secrets
+  - services
+  - persistentvolumeclaims
+  - namespaces
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - delete
+- apiGroups: ["apps"]
+  resources:
+  - deployments
+  - replicasets
+  - statefulsets
+  - daemonsets
+  verbs:
+  - get
+  - list
+  - watch
+  - create 
+  - update 
+  - delete
+  
