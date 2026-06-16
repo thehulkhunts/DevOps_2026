@@ -1,0 +1,10 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole 
+metadata:
+  name: admin-rbac
+rules:
+- apiGroups: ["*"]
+  resources: ["*"]
+  verbs: ["*"]
+
+# when you quotated with * for every thing, it means that yo are giving every apiresource permission 
