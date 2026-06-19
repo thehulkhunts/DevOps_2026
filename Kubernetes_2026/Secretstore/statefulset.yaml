@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql
+  namespace: payment
+spec:
+  selector:
+    matchLabels:
+      app: mysql
+  serviceName: mysql
+  replicas: 3
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 999
+      containers:
+      - name: mysql
+        image: mysql:8.0
+        ports:
+        - containerPort: 3306
+        volumeMounts:
+        - name: mysql-data
+          mountPath: /var/lib/mysql
+        - name: mysql-secret-volume
+          mountPath: /etc/mysql-secret
+          readOnly: true
+        resources:
+          limits:
+            cpu: 2
+            memory: "4Gi"
+          requests: 
+            memory: "1Gi"
+            cpu: "500m"
+    volumes:
+    - name: mysql-secret-volume
+      secret:
+        secretName: payments-db-secret
+  volumeClaimTemplates:
+  - metadata:
+      name: mysql-data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: gp3
+      resources:
+        requests:
+          storage: 1Gi
