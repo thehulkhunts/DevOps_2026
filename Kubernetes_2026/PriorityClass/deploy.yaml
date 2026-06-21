@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payments-service-api
+  namespace: production
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: payments
+      version: v1 
+  template:
+    metadata:
+      labels: 
+        app: payments
+        version: v1 
+    spec:
+      imagePullSecrets:
+      - name: reg-cred
+      priorityClassName: high-priority #scheduler consider this deployment as high-priority and preempts the lower priority pods
+      containers:
+      - name: payments-api 
+        image: vinayjadhav/web-app:v1.0.0
+        ports:
+        - containerPort: 8080
+        resource:
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+        securityContext:
+          runAsNonRoot: true
+          allowPrivelegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: 
+            - ALL 

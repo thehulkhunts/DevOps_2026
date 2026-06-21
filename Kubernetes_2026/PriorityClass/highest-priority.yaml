@@ -1,0 +1,25 @@
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: high-priority
+globaldefault: false
+value: 10000
+description: "used for critical applications like kube-system workloads"
+
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: medium-priority
+globaldefault: false
+vlaue: 1000
+description: "used for production critical applications like payments,logging,auth etc"
+
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: medium-priority
+globaldefault: false
+vlaue: 100
+description: "used for dev apps testing purpose"
