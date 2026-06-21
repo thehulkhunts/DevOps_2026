@@ -1,0 +1,25 @@
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: vpa-web-service
+  namespace:
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: api-service
+  updatePolicy: Auto #Auto means vpa will evict pod and recreate with new resources 
+# updatePolicy: Off only gives recomendations
+# updatePolicy: Initial apply resources when pods are created
+  resourcePolicy:
+    containersPolicies:
+    - containerName: "*"
+      minAllowed:
+        cpu: "250m" #not less than "250m"
+        memory: "256Mi" #not less than "256Mi"
+      maxAllowed:
+        cpu: "2" #not more than 2 cpu's
+        memory: "3Gi" # not more than 3Gi 
+      controlledResources:
+      - cpu
+      - memory  

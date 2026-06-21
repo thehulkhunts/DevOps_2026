@@ -1,0 +1,33 @@
+{
+ "Version":"2012-10-17",
+
+ "Statement":[
+
+  {
+   "Effect":"Allow",
+
+   "Action":[
+    "secretsmanager:GetSecretValue",
+    "secretsmanager:DescribeSecret"
+   ],
+
+   "Resource":[
+    "arn:aws:secretsmanager:us-east-1:<AWS-ACCOUNT-ID>:secret:prod/payment/*"
+   ]
+  },
+
+
+  {
+   "Effect":"Allow",
+
+   "Action":[
+    "kms:Decrypt"
+   ],
+
+   "Resource":[
+    "arn:aws:kms:us-east-1:<AWS-ACCOUNT-ID>:key/<KMS-ID>" 
+   ]
+  }
+
+ ]
+}
