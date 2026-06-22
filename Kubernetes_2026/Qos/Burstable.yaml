@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: Burstable-class
+spec:
+  selector:
+    matchLabels:
+      app: Burstable-class
+  template:
+    metadata:
+      labels:
+        app: Burstable-class
+    spec:
+      containers:
+      - name: Burstable-class
+        image: nginx
+        resources:
+          limits:
+            memory: "128Mi"
+            cpu: "500m"
+          requests:
+            memory: "100Mi"
+            cpu: "250m"  # request doesnot match to limits, so Burstable class
+        ports:
+        - containerPort: 80

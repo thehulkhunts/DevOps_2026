@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: besteffort-class
+spec:
+  selector:
+    matchLabels:
+      app: besteffort-class
+  template:
+    metadata:
+      labels:
+        app: besteffort-class
+    spec:
+      containers:
+      - name: myapp
+        image: nginx
+        ports:
+        - containerPort: 80
+#if you dont specify pod resources it goes under best effort class

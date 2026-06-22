@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: guaranted-class-example
+spec:
+  selector:
+    matchLabels:
+      app: guaranted-class-example
+  template:
+    metadata:
+      labels:
+        app: guaranted-class-example
+    spec:
+      containers:
+      - name: guaranted-class-example
+        image: nginx
+        resources:
+          limits:
+            memory: "128Mi"
+            cpu: "500m"
+          requests:
+            memory: "128Mi"
+            cpu: "500m"  # request matches to limits so guaranted class
+        ports:
+        - containerPort: 80
