@@ -30,3 +30,13 @@ For VPA: Vertical Pod Autoscaling:
    vpa-admission-controller
    vpa-recommender
    vpa-updater
+
+For Cluster Autoscaler :
+
+--> Follow cluster-Autoscaler-deployment-yaml located in parentdirectory "Autoscaling"
+    and has IAM-Policy json file in same parent directory
+
+    Create a Iam-Role and attach that policy to that role and build trust relationship with OIDC of eks 
+    for secure and trust connections, call you service account in trust relationship section 
+
+    --> Annotate you service Account with created role, this gives you IRSA procedure, instead of placing plicy into node role sections. 
