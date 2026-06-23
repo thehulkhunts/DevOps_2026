@@ -1,0 +1,19 @@
+# deny all ingress traffic to all pods in the namespace
+#- `namespace: default` deploy this policy to the `default` namespace.
+#- `podSelector:` is empty, this means it will match all the pods. Therefore,
+ # the policy will be enforced to ALL pods in the `default` namespace .
+#- There are no `ingress` rules specified. This causes incoming traffic to be
+ # dropped to the selected (=all) pods.
+  #- In this case, you can just omit the `ingress` field, or leave it empty
+   # like `ingress:`
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-all-ingress-to-ns
+  namespace: payments
+spec:
+  podSelector: {}
+  ingress: []
+
+  # this will denies all traffic to all pods in the payment namespace

@@ -1,0 +1,15 @@
+# dent egress traffic from an application
+# lets say you have database called postgresssql, drops egress traffic from that postgress
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dropegress-from-anapplication
+  namespace: database 
+spec:
+  podSelector:
+    matchLabels:
+      app: database
+  policyTypes:
+  - Egress 
+  egress: []

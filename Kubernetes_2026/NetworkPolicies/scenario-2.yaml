@@ -1,0 +1,17 @@
+kind: NetworkPolicy
+apiVersion: networking.k8s.io/v1
+metadata:
+  name: allow-tarffic-to-some-pods-from-diff-ns
+  namespace: payments
+spec:
+  podSelector:
+    matchLabels:
+      app: paymnets-pods
+  ingress:
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            app: logs  # chooses all pods in namespaces labelled with app=logs
+        podSelector:
+          matchLabels:
+            app: logging-pods  # chooses pods with app=logging-pods

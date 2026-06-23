@@ -1,0 +1,18 @@
+# limit the traffic to payments pods
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: limit-traffic-to-payments
+  namespace: payments
+spec:
+  podSelector:
+    matchLabels:
+      app: payments
+  ingress:
+  - from:
+      - podSelector:
+          matchLabels:
+            app: orders
+
+# it will only allow traffic from orders labelled pods to payment pods
+         

@@ -1,0 +1,15 @@
+#Allow tarffic from all namespace:
+# for a payments pods allow all tarffic from all namespace
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-all-ingress-traffic-all-ns
+  namespace: payment
+spec:
+  podSelector:
+    matchLabels:
+      app: paymnets-pods
+  ingress:
+  - from:
+      - namespaceSelector:  {}

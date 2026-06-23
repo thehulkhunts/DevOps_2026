@@ -1,0 +1,32 @@
+# Deny external traffic and allows in the cluster only
+# This policy applies to pods with `app=foo` and in Egress (outbound) direction.
+#* Similar to [DENY egress traffic from an
+ # application](11-deny-egress-traffic-from-an-application.md) example, this policy
+  #allows all outbound traffic on ports 53/udp and 53/tcp for DNS resolution.
+#* `to:` specifies an empty `namespaceSelector`. This will select **all pods in
+ # all namespaces**, so the outbound traffic to pods in the cluster will be
+  #allowed.
+  #* And since they are not listed, traffic to the IP addresses outside the cluster
+   # are denied.*/
+
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-external-traffic
+  namespace: database
+spec:
+  podSelector:
+    matchLabels:
+      app: database
+      role: db 
+  egress:
+  - to:
+    - namespaceSelector: {}
+  - ports:
+    - port: 53
+      protocol: TCP
+    - port: 53
+      protocol: UDP 
+
+      
