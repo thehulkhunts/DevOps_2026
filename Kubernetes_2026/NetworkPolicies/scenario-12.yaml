@@ -1,0 +1,27 @@
+# lets say you haev an redis application datbase and you wnant to allow some of your microservices to access
+# redis-database, how would you achieve this?
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis-to-some-mcs
+  namespace: database 
+spec:
+  podSelector:
+    matchLabels:
+      app: redis 
+      role: database 
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: orders
+          role: booking-orders
+    - podSelector:
+        matchLabels:
+          app: paymnets-pods
+          role: payment-service
+    - podSelector:
+        matchLabels:
+          app: cart-services
+          role: cart

@@ -1,0 +1,16 @@
+# deny all ingress traffic to payments namespace from all other namespace
+# scenario:
+# to the payment namespace deny all ingress traffic from all other namespace
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-ingress-from-allotherns
+  namespace: payment 
+spec: 
+  podSelector:
+    matchLabels:
+      app: paymnets-pods
+  ingress:
+  - from:
+    - namespaceSelector: []

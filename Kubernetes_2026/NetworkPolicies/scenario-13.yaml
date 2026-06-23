@@ -1,0 +1,14 @@
+#Deny all egress (outbound traffic) from a namespace
+
+# This scenario will tell us that from a namespace let's say database deny all egress traffic
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: restrict-egress-from-namespace
+  namespace: database
+spec:
+  podSelector: {} #select all pods 
+  egress: [] # drops outbound traffic
+  policyTypes: 
+  - Egress 

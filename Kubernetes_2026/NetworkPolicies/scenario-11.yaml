@@ -1,0 +1,27 @@
+# Allow traffic only to particular port
+
+#This NetworkPolicy lets you define ingress rules for specific ports
+#of an application. If you do not specify a port in the
+#ingress rules, the rule applies to all ports. 
+
+#**Use Cases**
+#- Allow monitoring system to collect the metrics by querying the diagnostics
+  #port of your application, without giving it access to the rest of the
+  #application.
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: from-a-specific-port
+  namespace: web-api
+spec:
+  podSelector:
+    matchLabels:
+      app: web-api
+  ingress:
+  - ports:
+      - port: 5000
+    from:
+    - podSelector:
+        matchLabels:
+          role: monitoring

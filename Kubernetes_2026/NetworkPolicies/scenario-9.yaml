@@ -1,0 +1,18 @@
+#restrict traffic to paymentpods from a namespace which has a label purpose=production
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: payment-allow-withlabel-production
+  namespace: payments 
+spec:
+  podSelector:
+    matchLabels:
+      app: paymnets-pods
+  ingress:
+  - from:
+      - namespaceSelector:
+          matchLabels:
+            purpose: production
+
+# it will allows only ingress traffic from those namespaces which has label purpose=production

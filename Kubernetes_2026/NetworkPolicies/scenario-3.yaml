@@ -1,0 +1,13 @@
+# deny-all-ingress-traffic-to an application 
+# deny incoming ingress traffic to a pod labelled with app=payments
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-ingress-tarffic-to-paymentspod
+  namespace: payments
+spec:
+  podSelector:
+    matchLabels:
+      app: payments
+  ingress: []  # you did not define any ingress rule, so it assumes traffic needs to be blocked.

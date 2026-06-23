@@ -1,0 +1,14 @@
+# allow all traffic to an application which is incoming traffic
+# web-api pods allow ingress traffic from  same namespace and all other namespace in the cluster
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-all-ingress-traffic
+  namespace: payments
+spec:
+  podSelector:
+    matchLabels:
+      app: paymnets-pods
+  ingress:
+  - {}

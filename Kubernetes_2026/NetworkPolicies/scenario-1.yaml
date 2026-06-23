@@ -1,0 +1,20 @@
+#Allow the incoming traffic to the backend pod from the front-end pod 
+# front-end pod label = frontend-payment
+# backend pod label = backend-payment for ex:
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-traffic-payments
+  namespace: payments 
+spec:
+  policyTypes:
+    - Ingress
+  podSelector:
+    matchLabels:
+      app: backend-payment
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: frontend-payment
