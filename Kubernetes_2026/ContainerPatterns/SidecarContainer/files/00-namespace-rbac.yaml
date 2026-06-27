@@ -1,0 +1,56 @@
+---
+# =============================================================
+# 00-namespace-rbac.yaml
+# Namespace + ServiceAccount + IAM Role binding for the app
+# =============================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sidecar-demo
+  labels:
+    app.kubernetes.io/managed-by: kubectl
+    environment: production
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nodeapp-sa
+  namespace: sidecar-demo
+  annotations:
+    # Replace with your actual IAM Role ARN that has CloudWatch Logs permissions
+    eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/sidecar-demo-cloudwatch-role
+  labels:
+    app: node-api
+
+---
+# ClusterRole: read node/pod metadata (needed by Fluent Bit)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: fluent-bit-read
+  labels:
+    app: fluent-bit
+rules:
+  - apiGroups: [""]
+    resources:
+      - namespaces
+      - pods
+      - nodes
+    verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: fluent-bit-read
+  labels:
+    app: fluent-bit
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: fluent-bit-read
+subjects:
+  - kind: ServiceAccount
+    name: nodeapp-sa
+    namespace: sidecar-demo

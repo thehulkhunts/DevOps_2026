@@ -1,0 +1,146 @@
+---
+# =============================================================
+# 05-service.yaml
+# Internal ClusterIP Service — exposes Nginx sidecar (8443)
+# ALB Ingress or AWS Load Balancer Controller sits in front
+# =============================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-api-svc
+  namespace: sidecar-demo
+  labels:
+    app: node-api
+  annotations:
+    # Optional: expose Fluent Bit metrics to Prometheus
+    prometheus.io/scrape: "true"
+    prometheus.io/port:   "2020"
+spec:
+  type: ClusterIP
+  selector:
+    app: node-api
+  ports:
+    - name:       https
+      port:       443
+      targetPort: 8443
+      protocol:   TCP
+    - name:       metrics
+      port:       2020
+      targetPort: 2020
+      protocol:   TCP
+
+---
+# =============================================================
+# 06-hpa.yaml
+# Horizontal Pod Autoscaler
+# Scales 3 → 10 replicas based on CPU + memory
+# =============================================================
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: node-api-hpa
+  namespace: sidecar-demo
+  labels:
+    app: node-api
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: node-api
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type:               AverageUtilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type:               AverageUtilization
+          averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300      # Don't scale down too aggressively
+      policies:
+        - type:          Pods
+          value:         1
+          periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 0        # Scale up immediately
+      policies:
+        - type:          Pods
+          value:         3
+          periodSeconds: 60
+
+---
+# =============================================================
+# 07-pdb.yaml
+# PodDisruptionBudget — guarantees minimum 2 replicas during
+# voluntary disruptions (node drains, rolling upgrades)
+# =============================================================
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: node-api-pdb
+  namespace: sidecar-demo
+  labels:
+    app: node-api
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: node-api
+
+---
+# =============================================================
+# 08-networkpolicy.yaml
+# Restrict ingress/egress at the pod level
+# =============================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: node-api-netpol
+  namespace: sidecar-demo
+  labels:
+    app: node-api
+spec:
+  podSelector:
+    matchLabels:
+      app: node-api
+  policyTypes:
+    - Ingress
+    - Egress
+
+  ingress:
+    # Allow traffic only from the AWS Load Balancer Controller
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - port:     8443
+          protocol: TCP
+
+  egress:
+    # Allow DNS resolution
+    - ports:
+        - port:     53
+          protocol: UDP
+        - port:     53
+          protocol: TCP
+    # Allow HTTPS to AWS services (CloudWatch, ECR, SSM)
+    - ports:
+        - port:     443
+          protocol: TCP
+    # Allow Kubernetes API server (Fluent Bit k8s metadata filter)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - port:     443
+          protocol: TCP
