@@ -1,0 +1,19 @@
+{
+  "Version": "2012-10-17",
+
+  "Statement": [
+
+    {
+      "Effect": "Allow",
+
+      "Action": [
+        "secretsmanager:GetSecretValue"
+      ],
+
+      "Resource": [
+        "arn:aws:secretsmanager:ap-south-1:123456789012:secret:prod/payment/tls-*"
+      ]
+    }
+
+  ]
+}

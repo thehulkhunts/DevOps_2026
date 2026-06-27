@@ -1,0 +1,7 @@
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: high-priority
+globaldefault: false
+value: 1000000
+description: "used for highest-priority workloads"
