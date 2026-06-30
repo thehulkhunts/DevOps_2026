@@ -1,0 +1,157 @@
+---
+# =============================================================
+# 03-service-hpa-pdb-netpol.yaml
+# =============================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: payment-svc
+  namespace: adapter-demo
+  labels:
+    app: payment-svc
+spec:
+  type: ClusterIP
+  selector:
+    app: payment-svc
+  ports:
+    - name:       http
+      port:       8080
+      targetPort: 8080
+      protocol:   TCP
+    - name:       metrics
+      port:       9404
+      targetPort: 9404
+      protocol:   TCP
+
+---
+# =============================================================
+# Prometheus Operator ServiceMonitor — points at the ADAPTER's
+# port. If you're not running Prometheus Operator, the
+# prometheus.io/scrape annotations on the pod template (in
+# 02-deployment.yaml) cover plain Prometheus auto-discovery
+# instead — this is additive, not required.
+# =============================================================
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: payment-svc-jmx-metrics
+  namespace: adapter-demo
+  labels:
+    app: payment-svc
+    release: prometheus   # match your Prometheus Operator's serviceMonitorSelector
+spec:
+  selector:
+    matchLabels:
+      app: payment-svc
+  endpoints:
+    - port:     metrics
+      path:     /metrics
+      interval: 30s
+      scrapeTimeout: 10s
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: payment-svc-hpa
+  namespace: adapter-demo
+  labels:
+    app: payment-svc
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: payment-svc
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type:               AverageUtilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type:               AverageUtilization
+          averageUtilization: 75
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type:          Pods
+          value:         1
+          periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+        - type:          Pods
+          value:         2
+          periodSeconds: 60
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: payment-svc-pdb
+  namespace: adapter-demo
+  labels:
+    app: payment-svc
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: payment-svc
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: payment-svc-netpol
+  namespace: adapter-demo
+  labels:
+    app: payment-svc
+spec:
+  podSelector:
+    matchLabels:
+      app: payment-svc
+  policyTypes:
+    - Ingress
+    - Egress
+
+  ingress:
+    # Application traffic from internal callers
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - port:     8080
+          protocol: TCP
+    # Prometheus scraping the adapter's metrics port
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port:     9404
+          protocol: TCP
+
+  egress:
+    - ports:
+        - port:     53
+          protocol: UDP
+        - port:     53
+          protocol: TCP
+    # Database / downstream services — replace with your VPC CIDR
+    - to:
+        - ipBlock:
+            cidr: 10.0.0.0/16
+      ports:
+        - port:     5432
+          protocol: TCP
+    - ports:
+        - port:     443
+          protocol: TCP
