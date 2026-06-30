@@ -1,0 +1,230 @@
+---
+# =============================================================
+# 02-deployment.yaml
+# 2-container Pod (Adapter pattern):
+#   1. payment-svc   — legacy Java app, exposes JMX on :9999
+#                       (no Prometheus awareness whatsoever)
+#   2. jmx-adapter   — adapter container, polls JMX over
+#                       localhost, re-exposes Prometheus-format
+#                       metrics on :9404
+#
+# Prometheus (or CloudWatch Container Insights / ADOT) scrapes
+# the adapter's :9404/metrics endpoint exactly the same way it
+# scrapes every other modern service in the cluster — it has no
+# idea the underlying app speaks JMX, not Prometheus.
+# =============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-svc
+  namespace: adapter-demo
+  labels:
+    app: payment-svc
+    version: "2.4.1"
+    environment: production
+    app.kubernetes.io/team:  payments
+    app.kubernetes.io/owner: payments-oncall
+    cost-center: "CC-4471"
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: payment-svc
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: payment-svc
+        version: "2.4.1"
+      annotations:
+        # Prometheus auto-discovery — scrapes the ADAPTER's port,
+        # not the app's JMX port
+        prometheus.io/scrape: "true"
+        prometheus.io/port:   "9404"
+        prometheus.io/path:   "/metrics"
+    spec:
+      serviceAccountName: payment-svc-sa
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+
+      securityContext:
+        runAsNonRoot: true
+        runAsUser:    1000
+        runAsGroup:   1000
+        fsGroup:      2000
+        seccompProfile:
+          type: RuntimeDefault
+
+      topologySpreadConstraints:
+        - maxSkew:           1
+          topologyKey:       topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: payment-svc
+
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key:      app
+                    operator: In
+                    values:   [payment-svc]
+              topologyKey: kubernetes.io/hostname
+
+      # ╔══════════════════════════════════════════════════════════╗
+      # ║  CONTAINER 1 — payment-svc (legacy Java application)    ║
+      # ║  Exposes standard JMX remote on :9999 — nothing else    ║
+      # ║  changed about how this app has always run.              ║
+      # ╚══════════════════════════════════════════════════════════╝
+      containers:
+        - name: payment-svc
+          image: 123456789012.dkr.ecr.ap-south-1.amazonaws.com/payment-svc:2.4.1
+          imagePullPolicy: Always
+
+          ports:
+            - name: http-app
+              containerPort: 8080
+              protocol: TCP
+            - name: jmx
+              containerPort: 9999
+              protocol: TCP
+
+          env:
+            - name: JAVA_OPTS
+              value: >-
+                -Dcom.sun.management.jmxremote
+                -Dcom.sun.management.jmxremote.port=9999
+                -Dcom.sun.management.jmxremote.rmi.port=9999
+                -Dcom.sun.management.jmxremote.authenticate=false
+                -Dcom.sun.management.jmxremote.ssl=false
+                -Djava.rmi.server.hostname=127.0.0.1
+                -Xms512m -Xmx1024m
+            - name: SPRING_PROFILES_ACTIVE
+              value: production
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+
+          resources:
+            requests:
+              cpu:    "500m"
+              memory: "1Gi"
+            limits:
+              cpu:    "2000m"
+              memory: "1536Mi"
+              ephemeral-storage: "1Gi"
+
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            failureThreshold: 24      # JVM cold start can take 2 min
+            periodSeconds:    5
+
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8080
+            periodSeconds:    10
+            failureThreshold: 3
+            timeoutSeconds:   3
+
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8080
+            periodSeconds:    5
+            failureThreshold: 3
+            timeoutSeconds:   3
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem:   true
+            capabilities:
+              drop: ["ALL"]
+
+          volumeMounts:
+            - name:      app-tmp
+              mountPath: /tmp
+
+        # ╔══════════════════════════════════════════════════════════╗
+        # ║  ADAPTER — jmx-adapter (jmx_exporter)                    ║
+        # ║  Polls JMX on localhost:9999, translates to Prometheus  ║
+        # ║  format, exposes on :9404. This IS the adapter pattern: ║
+        # ║  same data, transformed into the format the rest of the ║
+        # ║  platform's tooling expects — app code untouched.       ║
+        # ╚══════════════════════════════════════════════════════════╝
+        - name: jmx-adapter
+          image: bitnami/jmx-exporter:0.20.0
+          imagePullPolicy: IfNotPresent
+
+          args:
+            - "9404"
+            - "/etc/jmx-exporter/jmx-exporter-config.yaml"
+
+          ports:
+            - name: metrics
+              containerPort: 9404
+              protocol: TCP
+
+          resources:
+            requests:
+              cpu:    "50m"
+              memory: "128Mi"
+            limits:
+              cpu:    "200m"
+              memory: "256Mi"
+              ephemeral-storage: "256Mi"
+
+          startupProbe:
+            httpGet:
+              path: /metrics
+              port: 9404
+            failureThreshold: 24      # waits for the app's JMX port to be ready first
+            periodSeconds:    5
+
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: 9404
+            periodSeconds:    15
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /metrics
+              port: 9404
+            periodSeconds:    5
+            failureThreshold: 3
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem:   true
+            runAsUser:  1000
+            runAsGroup: 1000
+            capabilities:
+              drop: ["ALL"]
+
+          volumeMounts:
+            - name:      jmx-exporter-config
+              mountPath: /etc/jmx-exporter
+              readOnly:  true
+            - name:      adapter-tmp
+              mountPath: /tmp
+
+      volumes:
+        - name: jmx-exporter-config
+          configMap:
+            name: jmx-exporter-config
+
+        - name: app-tmp
+          emptyDir: {}
+        - name: adapter-tmp
+          emptyDir: {}

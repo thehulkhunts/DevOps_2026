@@ -1,0 +1,22 @@
+---
+# =============================================================
+# 00-namespace-rbac.yaml
+# Namespace + ServiceAccount for the adapter pattern demo
+# =============================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: adapter-demo
+  labels:
+    app.kubernetes.io/managed-by: kubectl
+    environment: production
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: payment-svc-sa
+  namespace: adapter-demo
+  labels:
+    app: payment-svc
+  automountServiceAccountToken: false

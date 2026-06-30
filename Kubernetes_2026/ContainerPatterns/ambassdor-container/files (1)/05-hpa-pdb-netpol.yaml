@@ -24,7 +24,7 @@ spec:
       resource:
         name: cpu
         target:
-          type: Utilization
+          type: AverageUtilization
           averageUtilization: 70
   behavior:
     scaleDown:

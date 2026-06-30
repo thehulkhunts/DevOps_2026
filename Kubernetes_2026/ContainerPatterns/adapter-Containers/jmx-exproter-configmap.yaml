@@ -1,0 +1,73 @@
+---
+# =============================================================
+# 01-jmx-exporter-configmap.yaml
+# Adapter config: jmx_exporter polls the Java app's JMX MBeans
+# over RMI on localhost and re-exposes them as Prometheus-format
+# metrics on its own HTTP port.
+#
+# The Java app (payment-svc) has ZERO Prometheus awareness —
+# it just runs with standard JMX remote enabled, exactly as it
+# always has. The adapter does all the translation.
+# =============================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jmx-exporter-config
+  namespace: adapter-demo
+  labels:
+    app: payment-svc
+    component: jmx-adapter
+data:
+  jmx-exporter-config.yaml: |
+    # Connect to the app's JMX port over localhost (same pod)
+    hostPort: 127.0.0.1:9999
+
+    # Re-label JVM/app MBeans into clean Prometheus metric names
+    lowercaseOutputName: true
+    lowercaseOutputLabelNames: true
+
+    rules:
+      # ── JVM heap memory ──────────────────────────────────────
+      - pattern: 'java.lang<type=Memory><HeapMemoryUsage>(\w+)'
+        name: jvm_memory_heap_$1_bytes
+        type: GAUGE
+
+      # ── JVM garbage collection ───────────────────────────────
+      - pattern: 'java.lang<type=GarbageCollector, name=(.+)><>CollectionCount'
+        name: jvm_gc_collection_count
+        labels:
+          gc: "$1"
+        type: COUNTER
+
+      - pattern: 'java.lang<type=GarbageCollector, name=(.+)><>CollectionTime'
+        name: jvm_gc_collection_time_ms
+        labels:
+          gc: "$1"
+        type: COUNTER
+
+      # ── Thread pool / connection pool stats (app-specific MBean) ──
+      - pattern: 'com.payment.app<type=ConnectionPool><>ActiveConnections'
+        name: payment_db_pool_active_connections
+        type: GAUGE
+
+      - pattern: 'com.payment.app<type=ConnectionPool><>IdleConnections'
+        name: payment_db_pool_idle_connections
+        type: GAUGE
+
+      # ── Business metric: transaction processing (app-specific MBean) ──
+      - pattern: 'com.payment.app<type=TransactionProcessor><>ProcessedCount'
+        name: payment_transactions_processed_total
+        type: COUNTER
+
+      - pattern: 'com.payment.app<type=TransactionProcessor><>FailedCount'
+        name: payment_transactions_failed_total
+        type: COUNTER
+
+      - pattern: 'com.payment.app<type=TransactionProcessor><>AverageLatencyMs'
+        name: payment_transaction_latency_ms
+        type: GAUGE
+
+      # ── Catch-all for any other JVM MBeans ───────────────────
+      - pattern: 'java.lang<type=Threading><>ThreadCount'
+        name: jvm_threads_current
+        type: GAUGE
