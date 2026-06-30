@@ -1,0 +1,27 @@
+---
+# =============================================================
+# 03-ca-bundle-configmap.yaml
+# Amazon's CA bundle used by stunnel to verify ElastiCache's
+# TLS certificate (ElastiCache uses Amazon-issued certs).
+#
+# Download the current bundle from:
+#   https://www.amazontrust.com/repository/AmazonRootCA1.pem
+#
+# In production, this is typically baked into the ambassador
+# image at build time or fetched via an init container — NOT
+# left as a placeholder. Shown here as a ConfigMap for clarity.
+# =============================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-ca-bundle
+  namespace: ambassador-demo
+  labels:
+    app: order-worker
+    component: redis-ambassador
+data:
+  ca-bundle.crt: |
+    -----BEGIN CERTIFICATE-----
+    REPLACE_WITH_ACTUAL_AMAZON_ROOT_CA1_PEM_CONTENTS
+    Download from: https://www.amazontrust.com/repository/AmazonRootCA1.pem
+    -----END CERTIFICATE-----

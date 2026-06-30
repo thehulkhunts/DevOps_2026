@@ -1,0 +1,42 @@
+---
+# =============================================================
+# 02-stunnel-configmap.yaml
+# Ambassador config: stunnel terminates TLS to ElastiCache.
+#
+# The app talks PLAIN TCP to localhost:6379.
+# stunnel wraps that connection in TLS and forwards it to the
+# real ElastiCache endpoint on port 6379 (TLS-enabled cluster).
+#
+# This is the core of the ambassador pattern: the app has zero
+# knowledge of TLS, certificate validation, or the real endpoint.
+# =============================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stunnel-config
+  namespace: ambassador-demo
+  labels:
+    app: order-worker
+    component: redis-ambassador
+data:
+  stunnel.conf: |
+    ; Global settings
+    foreground = yes
+    pid = /tmp/stunnel.pid
+    debug = warning
+    output = /dev/stdout
+
+    ; Performance: connection reuse to upstream Redis
+    [redis-ambassador]
+    client = yes
+    accept  = 127.0.0.1:6379
+    connect = REPLACE_WITH_ELASTICACHE_PRIMARY_ENDPOINT:6379
+
+    ; TLS verification against ElastiCache's cert
+    verifyChain = yes
+    CAfile = /etc/stunnel/certs/ca-bundle.crt
+    checkHost = REPLACE_WITH_ELASTICACHE_PRIMARY_ENDPOINT
+
+    ; Connection tuning
+    TIMEOUTclose = 5
+    TIMEOUTconnect = 10

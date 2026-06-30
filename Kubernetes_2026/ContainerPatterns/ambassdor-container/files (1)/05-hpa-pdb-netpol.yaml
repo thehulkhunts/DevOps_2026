@@ -1,0 +1,100 @@
+---
+# =============================================================
+# 05-hpa-pdb-netpol.yaml
+# Worker has no externally exposed port (it's a background
+# queue consumer), so there's no Service for inbound traffic —
+# only outbound egress controls matter here.
+# =============================================================
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: order-worker-hpa
+  namespace: ambassador-demo
+  labels:
+    app: order-worker
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: order-worker
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type:          Pods
+          value:         1
+          periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+        - type:          Pods
+          value:         3
+          periodSeconds: 60
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: order-worker-pdb
+  namespace: ambassador-demo
+  labels:
+    app: order-worker
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: order-worker
+
+---
+# =============================================================
+# NetworkPolicy: the worker pod may ONLY reach
+#   - DNS (53)
+#   - ElastiCache subnet on 6379 (via the ambassador, same pod —
+#     but the policy still governs the pod's actual egress)
+#   - AWS APIs over 443 (for SQS, S3, etc. if the worker uses them)
+# This is the security payoff of the ambassador pattern: you can
+# write one tight NetworkPolicy because there's exactly one
+# external dependency this pod is allowed to reach.
+# =============================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: order-worker-netpol
+  namespace: ambassador-demo
+  labels:
+    app: order-worker
+spec:
+  podSelector:
+    matchLabels:
+      app: order-worker
+  policyTypes:
+    - Egress
+
+  egress:
+    - ports:
+        - port:     53
+          protocol: UDP
+        - port:     53
+          protocol: TCP
+
+    # ElastiCache subnet — replace with your actual VPC CIDR
+    - to:
+        - ipBlock:
+            cidr: 10.0.0.0/16
+      ports:
+        - port:     6379
+          protocol: TCP
+
+    # AWS APIs (HTTPS)
+    - ports:
+        - port:     443
+          protocol: TCP
