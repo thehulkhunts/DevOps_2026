@@ -69,13 +69,13 @@ spec:
       resource:
         name: cpu
         target:
-          type:               AverageUtilization
+          type: AverageUtilization
           averageUtilization: 70
     - type: Resource
       resource:
         name: memory
         target:
-          type:               AverageUtilization
+          type: AverageUtilization
           averageUtilization: 75
   behavior:
     scaleDown:
