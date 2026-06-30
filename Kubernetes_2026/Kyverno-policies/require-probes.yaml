@@ -1,0 +1,62 @@
+---
+# =============================================================
+# 06-require-probes.yaml
+# REAL SCENARIO: This is the exact failure mode we discussed for
+# the node-api Deployment — without readinessProbe, Kubernetes
+# sends traffic to a pod the instant its container process
+# starts, even if the app hasn't finished connecting to its
+# database yet. Result: a wave of 502s on every rolling deploy
+# or autoscale event. Without livenessProbe, a deadlocked
+# container that's still "running" but unresponsive never gets
+# restarted — it just silently serves errors forever.
+#
+# This policy requires every container to define both probes.
+# =============================================================
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-probes
+  annotations:
+    policies.kyverno.io/title:       Require Liveness and Readiness Probes
+    policies.kyverno.io/category:    Best Practices
+    policies.kyverno.io/severity:    medium
+    policies.kyverno.io/description: >-
+      Every container must define a livenessProbe and a
+      readinessProbe. Missing probes cause traffic to be routed
+      to unready pods during deploys/scaling, and prevent
+      automatic recovery from deadlocked containers.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: require-liveness-and-readiness
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kyverno
+              # Jobs/CronJobs often legitimately skip probes — exclude by label
+          - resources:
+              selector:
+                matchLabels:
+                  probes-exempt: "true"
+      validate:
+        message: >-
+          Each container must define both livenessProbe and
+          readinessProbe.
+        pattern:
+          spec:
+            containers:
+              - livenessProbe:
+                  =(exec): "?*"
+                  =(httpGet): "?*"
+                  =(tcpSocket): "?*"
+                readinessProbe:
+                  =(exec): "?*"
+                  =(httpGet): "?*"
+                  =(tcpSocket): "?*"

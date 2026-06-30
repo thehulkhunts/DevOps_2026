@@ -1,0 +1,48 @@
+---
+# =============================================================
+# 10-mutate-default-securitycontext.yaml
+# REAL SCENARIO: Rather than only rejecting non-compliant pods
+# (which can frustrate teams mid-incident when they just need to
+# ship a hotfix), Kyverno can also "mutate" — automatically
+# inject safe defaults when a field is missing, instead of
+# blocking the deployment outright.
+#
+# This policy auto-injects a readOnlyRootFilesystem-friendly tmp
+# emptyDir-style seccompProfile default for any pod that didn't
+# explicitly set one — improving the security posture of every
+# deployment without requiring every team to remember it (similar
+# to how seccompProfile: RuntimeDefault was hand-set on every
+# container in the sidecar and ambassador examples).
+# =============================================================
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: mutate-default-seccomp
+  annotations:
+    policies.kyverno.io/title:       Mutate Default Seccomp Profile
+    policies.kyverno.io/category:    Pod Security Standards (Restricted)
+    policies.kyverno.io/severity:    medium
+    policies.kyverno.io/description: >-
+      Automatically sets seccompProfile to RuntimeDefault on any
+      pod that doesn't explicitly define one, rather than
+      blocking the deployment. RuntimeDefault filters dangerous
+      syscalls at the kernel level for every container.
+spec:
+  rules:
+    - name: add-default-seccomp
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kyverno
+      mutate:
+        patchStrategicMerge:
+          spec:
+            +(securityContext):
+              seccompProfile:
+                type: RuntimeDefault

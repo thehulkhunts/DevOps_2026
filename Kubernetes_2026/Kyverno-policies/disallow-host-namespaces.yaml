@@ -1,0 +1,72 @@
+---
+# =============================================================
+# 07-disallow-host-namespaces.yaml
+# REAL SCENARIO: hostNetwork: true is sometimes added "to fix a
+# DNS issue" or "for performance" during a debugging session and
+# never removed. This puts the pod directly on the node's
+# network namespace — it can see and potentially intercept
+# traffic from every other pod on that node, and bypasses the
+# NetworkPolicy enforcement we configured in both the sidecar
+# and ambassador examples entirely (NetworkPolicies operate at
+# the pod network namespace level).
+#
+# hostPath volumes are equally dangerous — they let a container
+# read/write arbitrary paths on the underlying EC2 node,
+# including kubelet credentials and other pods' volumes.
+# =============================================================
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: disallow-host-namespaces
+  annotations:
+    policies.kyverno.io/title:       Disallow Host Namespaces and hostPath
+    policies.kyverno.io/category:    Pod Security Standards (Baseline)
+    policies.kyverno.io/severity:    critical
+    policies.kyverno.io/description: >-
+      hostNetwork, hostPID, hostIPC, and hostPath volumes break
+      the isolation between a pod and its underlying node,
+      bypassing NetworkPolicy and exposing node-level resources.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: disallow-host-namespaces
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kyverno
+      validate:
+        message: >-
+          Setting hostNetwork, hostPID, or hostIPC to true is not
+          allowed — it breaks pod isolation from the node.
+        pattern:
+          spec:
+            =(hostNetwork): "false"
+            =(hostPID):     "false"
+            =(hostIPC):     "false"
+
+    - name: disallow-host-path
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kyverno
+      validate:
+        message: >-
+          hostPath volumes are not allowed — they expose the
+          underlying node's filesystem to the container.
+        pattern:
+          spec:
+            =(volumes):
+              - X(hostPath): "null"
