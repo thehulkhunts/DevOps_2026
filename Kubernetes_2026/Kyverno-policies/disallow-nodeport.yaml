@@ -1,0 +1,54 @@
+---
+# =============================================================
+# 17-disallow-nodeport.yaml
+# REAL SCENARIO: A developer testing connectivity changes a
+# Service type from ClusterIP to NodePort to "quickly test from
+# outside the cluster" — bypassing the ALB, bypassing any WAF
+# rules attached to it, and bypassing the nginx sidecar's rate
+# limiting and TLS termination entirely. The change gets merged
+# because CI doesn't catch Service-type changes, and now there's
+# an unauthenticated, un-rate-limited, plaintext HTTP path
+# directly into the application sitting open on every node's IP
+# on a high port.
+#
+# NodePort services are almost never the right choice in EKS —
+# ALB/NLB Ingress or LoadBalancer-type Services are the
+# supported production pattern. This policy blocks NodePort
+# entirely.
+# =============================================================
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: disallow-nodeport-services
+  annotations:
+    policies.kyverno.io/title:       Disallow NodePort Services
+    policies.kyverno.io/category:    Network Security
+    policies.kyverno.io/severity:    medium
+    policies.kyverno.io/description: >-
+      NodePort services expose a port directly on every node's
+      IP, bypassing ALB/NLB-level protections like WAF, TLS
+      termination, and rate limiting. Use ClusterIP with an
+      Ingress, or a LoadBalancer-type Service, instead.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: disallow-nodeport
+      match:
+        any:
+          - resources:
+              kinds: [Service]
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kyverno
+      validate:
+        message: >-
+          Service type NodePort is not allowed. Use ClusterIP
+          with an Ingress, or a LoadBalancer-type Service routed
+          through ALB/NLB.
+        pattern:
+          spec:
+            type: "ClusterIP | LoadBalancer | ExternalName"

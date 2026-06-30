@@ -1,0 +1,54 @@
+---
+# =============================================================
+# 15-restrict-storage-class.yaml
+# REAL SCENARIO: A team provisions a PVC without specifying a
+# storageClassName, so it falls back to the cluster's default
+# (often gp2 — the older, slower EBS volume type that's no
+# longer cost or performance optimal compared to gp3). Months
+# later, someone notices database I/O latency is 3x higher than
+# expected and burns a day debugging the application before
+# realizing the underlying EBS volume type was wrong from day one.
+#
+# There's also a cost angle: some teams accidentally provision
+# io2 (expensive, provisioned IOPS) for a workload that only
+# needed gp3, because "io2" sounds more production-grade.
+#
+# This policy requires PVCs to explicitly specify an approved
+# storageClassName — no silent fallback to a default.
+# =============================================================
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: restrict-storage-class
+  annotations:
+    policies.kyverno.io/title:       Require Explicit Approved Storage Class
+    policies.kyverno.io/category:    Best Practices, Cost Optimization
+    policies.kyverno.io/severity:    low
+    policies.kyverno.io/description: >-
+      PersistentVolumeClaims must explicitly specify an approved
+      storageClassName (gp3-encrypted or io2-encrypted). Silent
+      fallback to a cluster default can cause unexpected
+      performance characteristics or cost.
+spec:
+  validationFailureAction: Audit
+  background: true
+  rules:
+    - name: require-approved-storage-class
+      match:
+        any:
+          - resources:
+              kinds: [PersistentVolumeClaim]
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kyverno
+      validate:
+        message: >-
+          PVCs must explicitly set storageClassName to an
+          approved class: gp3-encrypted or io2-encrypted. Do not
+          rely on the cluster default storage class.
+        pattern:
+          spec:
+            storageClassName: "gp3-encrypted | io2-encrypted"

@@ -1,0 +1,77 @@
+---
+# =============================================================
+# 04-disallow-latest-tag.yaml
+# REAL SCENARIO: A Deployment references "myapp:latest". Three
+# weeks later, someone pushes a broken build to the same tag.
+# The next time a pod is rescheduled (node drain, HPA scale-up,
+# OOM restart) it silently pulls the broken image — with zero
+# git diff, zero deploy event, zero correlation in your CI/CD
+# history. This is one of the hardest production bugs to debug
+# because nothing in your manifests changed.
+#
+# This policy blocks the literal "latest" tag and blocks images
+# with no tag at all (which implicitly means latest).
+# =============================================================
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: disallow-latest-tag
+  annotations:
+    policies.kyverno.io/title:       Disallow Latest Tag
+    policies.kyverno.io/category:    Best Practices
+    policies.kyverno.io/severity:    medium
+    policies.kyverno.io/description: >-
+      Images must be pinned to an explicit, immutable tag or
+      digest. The ":latest" tag (or no tag) causes silent image
+      drift on pod reschedule with no audit trail.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: require-image-tag
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kyverno
+      validate:
+        message: "An image tag is required."
+        foreach:
+          - list: "request.object.spec.containers"
+            deny:
+              conditions:
+                any:
+                  - key:   "{{ images.containers.{{element.name}}.tag }}"
+                    operator: Equals
+                    value:   ""
+
+    - name: disallow-latest-tag
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kyverno
+      validate:
+        message: >-
+          The ':latest' tag is not allowed. Pin to a specific
+          version or image digest, e.g. myapp:1.4.2 or
+          myapp@sha256:abc123...
+        foreach:
+          - list: "request.object.spec.containers"
+            deny:
+              conditions:
+                any:
+                  - key:   "{{ element.image }}"
+                    operator: AnyIn
+                    value:
+                      - "*:latest"

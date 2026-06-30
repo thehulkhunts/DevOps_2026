@@ -1,0 +1,56 @@
+---
+# =============================================================
+# 18-require-ephemeral-storage-limits.yaml
+# REAL SCENARIO: This directly extends what we covered with the
+# app-tmp and fb-db emptyDir volumes in the sidecar/ambassador
+# examples. Without an ephemeral-storage limit, a container that
+# leaks temp files (a logging bug that never rotates, a crashed
+# upload that never cleans up its partial file in /tmp) can fill
+# the node's entire local disk. When a node's disk fills up,
+# kubelet evicts EVERY pod on that node — not just the offending
+# one — because the node itself becomes NotReady.
+#
+# This is a subtler version of the OOM-cascade scenario from
+# policy 03 (require-resource-limits), but for disk instead of
+# memory, and arguably more dangerous because it takes the whole
+# node down rather than just triggering OOM kills.
+# =============================================================
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-ephemeral-storage-limits
+  annotations:
+    policies.kyverno.io/title:       Require Ephemeral Storage Limits
+    policies.kyverno.io/category:    Best Practices
+    policies.kyverno.io/severity:    medium
+    policies.kyverno.io/description: >-
+      Every container must set an ephemeral-storage limit.
+      Without it, a container leaking temp files (logs, partial
+      uploads, crash dumps) can fill the node's local disk,
+      causing kubelet to evict every pod on that node.
+spec:
+  validationFailureAction: Audit
+  background: true
+  rules:
+    - name: require-ephemeral-storage-limit
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kyverno
+      validate:
+        message: >-
+          Every container must set
+          resources.limits.ephemeral-storage to bound how much
+          local disk it can consume on the node.
+        pattern:
+          spec:
+            containers:
+              - resources:
+                  limits:
+                    ephemeral-storage: "?*"

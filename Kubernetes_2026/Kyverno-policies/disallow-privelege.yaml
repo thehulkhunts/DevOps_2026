@@ -1,0 +1,73 @@
+---
+# =============================================================
+# 01-disallow-privileged.yaml
+# REAL SCENARIO: A developer copies a Dockerfile-era manifest
+# that runs a container in privileged mode for "debugging" and
+# forgets to remove it before pushing to production. A privileged
+# container can access ALL host devices and bypass most kernel
+# isolation — equivalent to root on the node itself.
+#
+# This policy blocks privileged containers and privilege
+# escalation cluster-wide, with audit mode first (see enforce
+# note below) so existing workloads can be fixed before hard block.
+# =============================================================
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: disallow-privileged-containers
+  annotations:
+    policies.kyverno.io/title:       Disallow Privileged Containers
+    policies.kyverno.io/category:    Pod Security Standards (Baseline)
+    policies.kyverno.io/severity:    critical
+    policies.kyverno.io/description: >-
+      Privileged containers can access all host devices and effectively
+      run as root on the node. This policy disallows the privileged
+      field and privilege escalation across the cluster.
+spec:
+  validationFailureAction: Enforce   # Set to Audit first in new clusters — see README
+  background: true
+  rules:
+    - name: privileged-containers
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kyverno
+      validate:
+        message: >-
+          Privileged containers are not allowed. Set
+          securityContext.privileged to false or remove it.
+        pattern:
+          spec:
+            containers:
+              - =(securityContext):
+                  =(privileged): "false"
+            =(initContainers):
+              - =(securityContext):
+                  =(privileged): "false"
+
+    - name: privilege-escalation
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kyverno
+      validate:
+        message: >-
+          Privilege escalation is disallowed. Set
+          securityContext.allowPrivilegeEscalation to false.
+        pattern:
+          spec:
+            containers:
+              - securityContext:
+                  allowPrivilegeEscalation: "false"

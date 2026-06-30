@@ -1,0 +1,77 @@
+---
+# =============================================================
+# 02-require-non-root.yaml
+# REAL SCENARIO: A base image (e.g. a default node:18 image)
+# runs as root by default. If that container is compromised via
+# a dependency vulnerability (think log4j-style RCE), the attacker
+# has root inside the container — one container-escape bug away
+# from root on the node.
+#
+# This mirrors exactly what we hand-wrote in the sidecar example
+# (runAsNonRoot: true, capabilities drop ALL) but now it's
+# enforced automatically for every pod in the cluster, not just
+# the ones a careful engineer remembered to configure.
+# =============================================================
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-non-root-and-drop-caps
+  annotations:
+    policies.kyverno.io/title:       Require Non-Root User and Dropped Capabilities
+    policies.kyverno.io/category:    Pod Security Standards (Restricted)
+    policies.kyverno.io/severity:    high
+    policies.kyverno.io/description: >-
+      Containers must not run as root and must drop the ALL Linux
+      capability set. This is the single highest-leverage control
+      against container-escape style vulnerabilities.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: run-as-non-root
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kyverno
+      validate:
+        message: >-
+          Containers must set runAsNonRoot: true at the pod or
+          container securityContext level.
+        anyPattern:
+          - spec:
+              securityContext:
+                runAsNonRoot: "true"
+          - spec:
+              containers:
+                - securityContext:
+                    runAsNonRoot: "true"
+
+    - name: drop-all-capabilities
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kyverno
+      validate:
+        message: >-
+          Containers must drop the ALL capability. Add
+          securityContext.capabilities.drop: ["ALL"] and only
+          add back specific capabilities if explicitly required.
+        pattern:
+          spec:
+            containers:
+              - securityContext:
+                  capabilities:
+                    drop:
+                      - ALL

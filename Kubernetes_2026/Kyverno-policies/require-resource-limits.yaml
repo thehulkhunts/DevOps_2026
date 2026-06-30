@@ -1,0 +1,57 @@
+---
+# =============================================================
+# 03-require-resource-limits.yaml
+# REAL SCENARIO: A new microservice ships without resource
+# requests/limits. Under load it consumes all available memory
+# on the node, triggering the OOM killer — which doesn't just
+# kill the offending pod, it can kill OTHER pods scheduled on
+# the same node (including your nginx-proxy or fluent-bit sidecars
+# from the earlier examples). This is one of the most common
+# causes of "random" production incidents in shared clusters.
+#
+# This policy requires every container to declare both requests
+# and limits for cpu and memory.
+# =============================================================
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-resource-limits
+  annotations:
+    policies.kyverno.io/title:       Require Resource Requests and Limits
+    policies.kyverno.io/category:    Best Practices
+    policies.kyverno.io/severity:    high
+    policies.kyverno.io/description: >-
+      Every container must declare CPU and memory requests and
+      limits. Missing limits allow a single pod to starve the
+      node and trigger cascading OOM kills of unrelated pods.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: validate-resources
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kyverno
+      validate:
+        message: >-
+          CPU and memory requests and limits are required on
+          every container. Example:
+          resources.requests.{cpu,memory} and
+          resources.limits.{cpu,memory}
+        pattern:
+          spec:
+            containers:
+              - resources:
+                  requests:
+                    cpu:    "?*"
+                    memory: "?*"
+                  limits:
+                    cpu:    "?*"
+                    memory: "?*"

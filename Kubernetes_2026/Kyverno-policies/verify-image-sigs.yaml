@@ -1,0 +1,61 @@
+---
+# =============================================================
+# 12-verify-image-signatures.yaml
+# REAL SCENARIO: Your registry restriction policy (from the
+# first batch) only checks WHERE an image comes from, not
+# WHETHER it's the exact image your CI/CD pipeline built. If an
+# attacker compromises ECR push credentials, or someone manually
+# pushes a "hotfix" image that skipped CI/CD entirely (and
+# skipped vulnerability scanning, tests, and code review with
+# it), the registry-restriction policy alone won't catch it —
+# the image is technically in your approved registry.
+#
+# Image signing closes this gap: only images cryptographically
+# signed by your CI/CD pipeline's signing key are allowed to
+# run. This is the same supply-chain principle as commit signing,
+# applied to container images.
+#
+# Requires cosign-based signing in your CI/CD pipeline first —
+# see prerequisites in README.
+# =============================================================
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: verify-image-signatures
+  annotations:
+    policies.kyverno.io/title:       Verify Container Image Signatures
+    policies.kyverno.io/category:    Supply Chain Security
+    policies.kyverno.io/severity:    high
+    policies.kyverno.io/description: >-
+      Only images signed by the organization's CI/CD pipeline
+      (via cosign/Sigstore) may be deployed. This prevents
+      unsigned or tampered images from running, even if they
+      come from an otherwise-trusted registry.
+spec:
+  validationFailureAction: Audit   # Flip to Enforce only after ALL images are signed — see README
+  background: false                # Signature checks only make sense at admission time
+  rules:
+    - name: check-image-signature
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kyverno
+      verifyImages:
+        - imageReferences:
+            - "123456789012.dkr.ecr.ap-south-1.amazonaws.com/*"
+          attestors:
+            - count: 1
+              entries:
+                - keys:
+                    publicKeys: |-
+                      -----BEGIN PUBLIC KEY-----
+                      REPLACE_WITH_YOUR_COSIGN_PUBLIC_KEY
+                      -----END PUBLIC KEY-----
+          mutateDigest: true
+          required: true

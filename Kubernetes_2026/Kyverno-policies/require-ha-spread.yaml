@@ -1,0 +1,64 @@
+---
+# =============================================================
+# 08-require-ha-spread.yaml
+# REAL SCENARIO: This is exactly what we configured manually in
+# the sidecar example's node-api Deployment — topologySpread +
+# anti-affinity across AZs. Without it, the Kubernetes scheduler
+# is free to pack all 3 replicas of a "highly available" service
+# onto a single node. When that node fails (AWS does retire/
+# replace EC2 instances regularly) or that AZ has an outage,
+# the service goes fully down despite having "3 replicas".
+#
+# This policy requires Deployments with 2+ replicas in
+# production namespaces to define either topologySpreadConstraints
+# or podAntiAffinity.
+# =============================================================
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-ha-spread
+  annotations:
+    policies.kyverno.io/title:       Require HA Topology Spread for Multi-Replica Deployments
+    policies.kyverno.io/category:    Best Practices
+    policies.kyverno.io/severity:    medium
+    policies.kyverno.io/description: >-
+      Deployments with 2 or more replicas must define
+      topologySpreadConstraints or podAntiAffinity to prevent
+      the scheduler from co-locating all replicas on a single
+      node or AZ, which defeats the purpose of replication.
+spec:
+  validationFailureAction: Audit   # Start in Audit — see README on rollout strategy
+  background: true
+  rules:
+    - name: require-spread-for-multi-replica
+      match:
+        any:
+          - resources:
+              kinds: [Deployment]
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kyverno
+      preconditions:
+        all:
+          - key:      "{{ request.object.spec.replicas }}"
+            operator: GreaterThanOrEquals
+            value:    2
+      validate:
+        message: >-
+          Deployments with 2+ replicas must define
+          topologySpreadConstraints or podAntiAffinity to spread
+          pods across nodes/AZs for high availability.
+        anyPattern:
+          - spec:
+              template:
+                spec:
+                  topologySpreadConstraints:
+                    - topologyKey: "?*"
+          - spec:
+              template:
+                spec:
+                  affinity:
+                    podAntiAffinity: "?*"

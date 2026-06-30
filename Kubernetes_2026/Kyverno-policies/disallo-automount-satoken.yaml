@@ -1,0 +1,63 @@
+---
+# =============================================================
+# 13-disallow-auto-mount-sa-token.yaml
+# REAL SCENARIO: By default, every pod automatically gets a
+# Kubernetes ServiceAccount token mounted at
+# /var/run/secrets/kubernetes.io/serviceaccount/token — even if
+# the application never calls the Kubernetes API. If that pod
+# is compromised (e.g. via a vulnerable dependency, like the
+# kind of RCE that hits Node.js or Python apps regularly), the
+# attacker now has a live credential to the Kubernetes API
+# itself — they can potentially list secrets, pods, or escalate
+# further depending on the ServiceAccount's RBAC permissions.
+#
+# Most application pods (your node-api, order-worker, nginx
+# sidecar, fluent-bit sidecar from earlier examples) never call
+# the Kubernetes API directly and don't need this token at all.
+#
+# This policy requires automountServiceAccountToken: false unless
+# explicitly opted in via label (for pods like Fluent Bit that
+# DO need API access for metadata enrichment).
+# =============================================================
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: disallow-auto-mount-sa-token
+  annotations:
+    policies.kyverno.io/title:       Disallow Automatic ServiceAccount Token Mount
+    policies.kyverno.io/category:    Pod Security Standards (Restricted)
+    policies.kyverno.io/severity:    high
+    policies.kyverno.io/description: >-
+      Pods must explicitly set automountServiceAccountToken to
+      false unless they are labeled as needing Kubernetes API
+      access. Most application pods never call the K8s API and
+      should not carry a live credential to it.
+spec:
+  validationFailureAction: Audit
+  background: true
+  rules:
+    - name: require-explicit-automount-false
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kyverno
+          # Pods that genuinely need K8s API access (e.g. Fluent Bit
+          # with its kubernetes metadata filter) opt in explicitly
+          - resources:
+              selector:
+                matchLabels:
+                  k8s-api-access: "required"
+      validate:
+        message: >-
+          automountServiceAccountToken must be explicitly set to
+          false at the pod spec level unless this workload is
+          labeled k8s-api-access=required.
+        pattern:
+          spec:
+            automountServiceAccountToken: "false"

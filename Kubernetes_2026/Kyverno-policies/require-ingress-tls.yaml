@@ -1,0 +1,72 @@
+---
+# =============================================================
+# 16-require-ingress-tls.yaml
+# REAL SCENARIO: A team launches a new internal admin dashboard
+# behind an Ingress resource without a tls block "because it's
+# internal, who's going to intercept that traffic." Six months
+# later that "internal" tool is exposed via a VPN misconfiguration
+# or a peered VPC nobody fully audited, and credentials are
+# flowing in plaintext HTTP across the network.
+#
+# This is the cluster-wide enforcement of the same TLS discipline
+# we hand-configured in the sidecar example's nginx ConfigMap
+# (TLS 1.2/1.3 only, HSTS headers) — but at the Ingress resource
+# level for anything using AWS Load Balancer Controller / ALB
+# Ingress instead of an in-pod nginx sidecar.
+# =============================================================
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-ingress-tls
+  annotations:
+    policies.kyverno.io/title:       Require TLS on Ingress Resources
+    policies.kyverno.io/category:    Best Practices, Network Security
+    policies.kyverno.io/severity:    high
+    policies.kyverno.io/description: >-
+      Every Ingress resource must define a tls block. Plaintext
+      HTTP ingresses risk credential and data exposure if network
+      assumptions about "internal-only" traffic ever change.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: require-tls-block
+      match:
+        any:
+          - resources:
+              kinds: [Ingress]
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kyverno
+      validate:
+        message: >-
+          Ingress resources must define a tls block with a valid
+          secretName referencing a TLS certificate. Plaintext
+          HTTP-only Ingress is not allowed.
+        pattern:
+          spec:
+            tls:
+              - secretName: "?*"
+
+    - name: require-ssl-redirect-annotation
+      match:
+        any:
+          - resources:
+              kinds: [Ingress]
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kyverno
+      validate:
+        message: >-
+          ALB Ingress resources must set the SSL redirect
+          annotation to force HTTP -> HTTPS redirection.
+        pattern:
+          metadata:
+            annotations:
+              alb.ingress.kubernetes.io/ssl-redirect: "443"

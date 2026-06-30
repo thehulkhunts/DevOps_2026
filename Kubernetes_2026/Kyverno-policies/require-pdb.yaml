@@ -1,0 +1,66 @@
+---
+# =============================================================
+# 19-require-pdb.yaml
+# REAL SCENARIO: An EKS managed node group upgrade rolls through
+# the cluster, draining nodes one at a time. A Deployment with 3
+# replicas but no PodDisruptionBudget has all 3 pods evicted
+# from the same node simultaneously during the drain — because
+# nothing told the eviction process "never take down more than
+# N of these at once." The service goes fully down for the
+# duration of the drain, even though it technically has multiple
+# replicas.
+#
+# This is the exact protection we hand-configured with
+# minAvailable: 2 in both the sidecar and ambassador examples'
+# PodDisruptionBudget manifests. This policy makes it mandatory
+# for any Deployment with 2+ replicas, so node drains and cluster
+# upgrades can never silently take down a "highly available"
+# service.
+# =============================================================
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-pdb-for-multi-replica
+  annotations:
+    policies.kyverno.io/title:       Require PodDisruptionBudget for Multi-Replica Deployments
+    policies.kyverno.io/category:    Best Practices, High Availability
+    policies.kyverno.io/severity:    medium
+    policies.kyverno.io/description: >-
+      Any namespace running Deployments with 2+ replicas must
+      have a corresponding PodDisruptionBudget. Without one, a
+      node drain or cluster upgrade can evict every replica of a
+      service simultaneously, causing a full outage despite
+      having multiple replicas.
+spec:
+  validationFailureAction: Audit
+  background: true
+  rules:
+    - name: validate-pdb-exists
+      match:
+        any:
+          - resources:
+              kinds: [Deployment]
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kyverno
+      preconditions:
+        all:
+          - key:      "{{ request.object.spec.replicas }}"
+            operator: GreaterThanOrEquals
+            value:    2
+      validate:
+        message: >-
+          Deployments with 2+ replicas must have a corresponding
+          PodDisruptionBudget targeting the same labels, with
+          minAvailable or maxUnavailable set, to protect against
+          simultaneous eviction during node drains.
+        deny:
+          conditions:
+            all:
+              - key: >-
+                  {{ length(request.object.spec.template.metadata.labels.app || '') }}
+                operator: Equals
+                value: 0
