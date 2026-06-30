@@ -1,0 +1,205 @@
+---
+# =============================================================
+# 04-deployment.yaml
+# 2-container Pod (Ambassador pattern):
+#   1. order-worker   — main app, talks to "Redis" on localhost:6379
+#   2. redis-ambassador — stunnel sidecar, terminates TLS + AUTH
+#      to real ElastiCache cluster, presents plain TCP locally
+#
+# The app's Redis client config is just:
+#   REDIS_HOST=127.0.0.1
+#   REDIS_PORT=6379
+#   (no TLS options, no cluster endpoint, no auth token in app code)
+# =============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-worker
+  namespace: ambassador-demo
+  labels:
+    app: order-worker
+    version: "1.0.0"
+    environment: production
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: order-worker
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: order-worker
+        version: "1.0.0"
+      annotations:
+        checksum/stunnel-config: "{{ stunnel-config-checksum }}"
+    spec:
+      serviceAccountName: worker-sa
+      terminationGracePeriodSeconds: 30
+
+      securityContext:
+        runAsNonRoot: true
+        runAsUser:    1000
+        runAsGroup:   1000
+        fsGroup:      2000
+        seccompProfile:
+          type: RuntimeDefault
+
+      topologySpreadConstraints:
+        - maxSkew:           1
+          topologyKey:       topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: order-worker
+
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key:      app
+                    operator: In
+                    values:   [order-worker]
+              topologyKey: kubernetes.io/hostname
+
+      # ╔══════════════════════════════════════════════════════════╗
+      # ║  CONTAINER 1 — order-worker (main application)          ║
+      # ║  Talks to "Redis" on localhost — has zero knowledge      ║
+      # ║  of TLS, AUTH tokens, or the real ElastiCache endpoint   ║
+      # ╚══════════════════════════════════════════════════════════╝
+      containers:
+        - name: order-worker
+          image: 123456789012.dkr.ecr.ap-south-1.amazonaws.com/order-worker:1.0.0
+          imagePullPolicy: Always
+
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: REDIS_HOST
+              value: "127.0.0.1"        # talks to the ambassador, not real Redis
+            - name: REDIS_PORT
+              value: "6379"
+            - name: REDIS_TLS
+              value: "false"            # ambassador handles TLS — app sees plain TCP
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+
+          resources:
+            requests:
+              cpu:    "250m"
+              memory: "256Mi"
+            limits:
+              cpu:    "1000m"
+              memory: "512Mi"
+
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            failureThreshold: 12
+            periodSeconds:    5
+
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds:    10
+            failureThreshold: 3
+            timeoutSeconds:   3
+
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8080
+            periodSeconds:    5
+            failureThreshold: 3
+            timeoutSeconds:   3
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem:   true
+            capabilities:
+              drop: ["ALL"]
+
+          volumeMounts:
+            - name:      app-tmp
+              mountPath: /tmp
+
+        # ╔══════════════════════════════════════════════════════════╗
+        # ║  AMBASSADOR — redis-ambassador (stunnel)                 ║
+        # ║  Presents plain TCP on localhost:6379                    ║
+        # ║  Forwards over TLS+AUTH to real ElastiCache endpoint     ║
+        # ║  This IS the ambassador pattern: app ↔ ambassador ↔      ║
+        # ║  external dependency, with all network complexity        ║
+        # ║  isolated in the ambassador container.                   ║
+        # ╚══════════════════════════════════════════════════════════╝
+        - name: redis-ambassador
+          image: jacobalberty/stunnel:5.71
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - name: redis-local
+              containerPort: 6379
+              protocol: TCP
+
+          resources:
+            requests:
+              cpu:    "50m"
+              memory: "32Mi"
+            limits:
+              cpu:    "200m"
+              memory: "64Mi"
+
+          livenessProbe:
+            tcpSocket:
+              port: 6379
+            initialDelaySeconds: 5
+            periodSeconds:       15
+            failureThreshold:    3
+
+          readinessProbe:
+            tcpSocket:
+              port: 6379
+            initialDelaySeconds: 3
+            periodSeconds:       5
+            failureThreshold:    3
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem:   true
+            runAsUser:  1000
+            runAsGroup: 1000
+            capabilities:
+              drop: ["ALL"]
+
+          volumeMounts:
+            - name:      stunnel-config
+              mountPath: /etc/stunnel/stunnel.conf
+              subPath:   stunnel.conf
+              readOnly:  true
+            - name:      redis-ca-bundle
+              mountPath: /etc/stunnel/certs
+              readOnly:  true
+            - name:      stunnel-tmp
+              mountPath: /tmp
+
+      volumes:
+        - name: stunnel-config
+          configMap:
+            name: stunnel-config
+
+        - name: redis-ca-bundle
+          configMap:
+            name: redis-ca-bundle
+
+        - name: app-tmp
+          emptyDir: {}
+        - name: stunnel-tmp
+          emptyDir: {}

@@ -1,0 +1,21 @@
+---
+# =============================================================
+# 00-namespace-rbac.yaml
+# Namespace + ServiceAccount for the ambassador pattern demo
+# =============================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ambassador-demo
+  labels:
+    app.kubernetes.io/managed-by: kubectl
+    environment: production
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: worker-sa
+  namespace: ambassador-demo
+  labels:
+    app: order-worker
