@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payments-api
+  namespace: payments
+  labels:
+    app: payments-api-mcs
+spec:
+  selector:
+    matchLabels:
+      app: payments-api
+  template:
+    metadata:
+      labels:
+        app: payments-api
+    spec:
+      securityCOntext:
+        runAsUser: 1000
+        runAsGroup: 2000
+        fsGroup: 3000
+      serviceAccountName: sa
+      imagePullSecrets:
+      - name: reg-cred
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: kubernetes.io/arch
+                operator: In 
+                values:
+                - linux
+            topologyKey: kubernetes.io/arch
+      containers:
+      - name: payments-api-v2
+        image: payments/app:v2.0.0
+        ports:
+          - containerPort: 8080
+            name: api
+            protocol: TCP
+        resources:
+          limits:
+            memory: "1Gi"
+            cpu: 1
+          requests:
+            memory: "512Mi"
+            cpu: "256m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          falureThreshold: 3
+        securityContext:
+          readOnlyRootFilesystem: true
+          allowPrivelegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        
+
+
+   

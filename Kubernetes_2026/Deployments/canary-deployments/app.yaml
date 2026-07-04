@@ -1,22 +1,25 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: java-app
-  namespace: dev
+  name: payments-api
+  namespace: payments
+  labels:
+    app: stable
+    role: payments
 spec:
   selector:
     matchLabels:
-      app: java-app 
+      app: payments-api 
   template:
     metadata:
       labels:
-        app: java-app
+        app: payments-api
     spec:
-      serviceAccountName: dev-sa-deployment
+      serviceAccountName: sa
       imagePullSecrets:
       - name: reg-cred
-      affinities:
-        podAffinity:
+      affinity:
+        podAntiAffinity:
           requiredDuringSchedulingIgnoredDUringExecution:
           - labelSelector:
               matchExpression:
@@ -24,11 +27,10 @@ spec:
                 operator: In 
                 values:
                 - linux
-                - Rhel
-                - amazonlinux
+            topologyKey: kubernetes.io/arch
       containers:
-      - name: java-app
-        image: vinayjadhav/web-app:v1.0.0
+      - name: payments-api-mcs
+        image: payments/app:v1.0.0
         resources:
           limits:
             memory: "128Mi"
@@ -56,38 +58,4 @@ spec:
             drop:
             - ALL
           readOnlyRootFileSystem: true
-
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: java-app-svc
-  namespace: dev
-spec:
-  selector:
-    app: java-app
-  ports:
-  - port: 80
-    targetPort: 8080
-  type: ClusterIP 
-
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: java-app-svc-ingress
-  labels:
-    app.kubernetes.io/name: java-app-svc-ingress
-  ingressClassName: "nginx"
-  rules:
-  - http:
-      paths:
-      - pathType: Prefix
-        path: /
-        backend:
-          service:
-            name: java-app-svc
-            port: 
-              number: 80
-
 
