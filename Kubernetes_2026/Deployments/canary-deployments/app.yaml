@@ -20,9 +20,9 @@ spec:
       - name: reg-cred
       affinity:
         podAntiAffinity:
-          requiredDuringSchedulingIgnoredDUringExecution:
+          requiredDuringSchedulingIgnoredDuringExecution:
           - labelSelector:
-              matchExpression:
+              matchExpressions:
               - key: kubernetes.io/arch
                 operator: In 
                 values:
@@ -52,10 +52,10 @@ spec:
             port: 8080
           initialDelaySeconds: 50
           periodSeconds: 10
-        seurityContext:
+        securityContext:
           allowPrivilegeEscalation: false
           capabilities:
             drop:
             - ALL
-          readOnlyRootFileSystem: true
+          readOnlyRootFilesystem: true
 
