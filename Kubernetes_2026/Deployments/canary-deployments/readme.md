@@ -55,7 +55,7 @@ tmp-volume directory at the time appliation starting.
 
                 volumeMounts:
                 - name: tmp-volume
-                  emptyDir: {}
-                  
+                  mountPath: /tmp
+
 Because, with out this when you try to deploy appliation onto k8S cluster, application gone into
 CrashLoopBackoff error state, application is assuming and creating a tmp directory at the time of execution, but in manifes you had, "allowReadOnlyFilesystem: true", this will cause tomcat to break into crashloopbackoff, because it has only read permissions, to solve this issue we have added /tmp directory to write, rest of things and directories into read mode.
