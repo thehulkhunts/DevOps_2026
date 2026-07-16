@@ -15,6 +15,9 @@ spec:
       labels:
         app: payments-api
     spec:
+      volumes:
+      - name: tmp-volume
+        emptyDir: {}
       serviceAccountName: sa
       imagePullSecrets:
       - name: reg-cred
@@ -31,6 +34,9 @@ spec:
       containers:
       - name: payments-api-mcs
         image: payments/app:v1.0.0
+        volumeMounts:
+        - name: tmp-volume
+          mountPath: /tmp
         resources:
           limits:
             memory: "128Mi"
