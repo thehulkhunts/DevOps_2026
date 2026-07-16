@@ -14,7 +14,7 @@ spec:
       labels:
         app: payments-api
     spec:
-      securityCOntext:
+      securityContext:
         runAsUser: 1000
         runAsGroup: 2000
         fsGroup: 3000
